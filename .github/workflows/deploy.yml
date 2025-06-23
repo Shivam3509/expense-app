@@ -1,0 +1,33 @@
+name: CI/CD Deploy Fullstack App to cPanel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.CPANEL_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.CPANEL_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync project to cPanel server via rsync
+        run: |
+          rsync -avz --exclude='.git' --exclude='node_modules' --exclude='__pycache__' \
+            . ${{ secrets.CPANEL_SSH_USER }}@${{ secrets.CPANEL_SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
+
+      - name: SSH and deploy Docker containers
+        run: |
+          ssh ${{ secrets.CPANEL_SSH_USER }}@${{ secrets.CPANEL_SSH_HOST }} << EOF
+            cd ${{ secrets.DEPLOY_PATH }}
+            docker compose down
+            docker compose up -d --build
+          EOF
